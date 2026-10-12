@@ -630,21 +630,45 @@ async function sha(s){
   const d=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));
   return [...new Uint8Array(d)].map(b=>b.toString(16).padStart(2,"0")).join("");
 }
+const SPEC_HASH="d56652d9c7e8c444c9101bda1f1dbb81743882ba75018e647cd9423b566b3180";
 async function unlockOrganizer(){
   if(localStorage.getItem("vain_org")===PIN_HASH)return true;
   document.body.classList.add("locked");
   const stage=document.getElementById("stage");
-  stage.innerHTML=`<div class="panel" style="max-width:420px"><div class="card" style="text-align:center">
-    <h3>Acceso del organizador</h3>
-    <p class="muted">Esta vista es solo para quien organiza el torneo. Si eres espectador, usa el enlace o el QR que te compartieron.</p>
-    <form id="pinf"><input type="password" id="pin" inputmode="numeric" autocomplete="off" placeholder="PIN" style="width:100%;text-align:center;margin:10px 0">
-    <button class="b" type="submit" style="margin:0">Entrar</button><p class="muted warn" id="pinerr"></p></form></div></div>`;
-  return new Promise(res=>{
-    document.getElementById("pinf").onsubmit=async e=>{
+  stage.innerHTML=`<div class="panel" style="max-width:440px"><div class="card" style="text-align:center">
+    <div class="row" style="grid-template-columns:1fr 1fr;margin-bottom:14px">
+      <button class="b" id="mOrg" style="margin:0">Organizador</button><button class="b alt" id="mSpec" style="margin:0">Espectador</button></div>
+    <form id="pinf"></form></div></div>`;
+  const f=document.getElementById("pinf");
+  const setMode=m=>{
+    document.getElementById("mOrg").className="b"+(m==="org"?"":" alt");
+    document.getElementById("mSpec").className="b"+(m==="spec"?"":" alt");
+    f.dataset.m=m;
+    f.innerHTML=m==="org"
+      ?`<h3>Acceso del organizador</h3><p class="muted">Solo para quien organiza el torneo.</p>
+        <input type="password" id="pin" inputmode="numeric" autocomplete="off" placeholder="PIN" style="width:100%;text-align:center;margin:10px 0">
+        <button class="b" type="submit" style="margin:0">Entrar</button><p class="muted warn" id="pinerr"></p>`
+      :`<h3>Acceso de espectador</h3><p class="muted">Ingresa la contraseña y pega el enlace del torneo que te compartieron (si ya abriste el enlace, no hace falta).</p>
+        <input type="password" id="pin" autocomplete="off" placeholder="Contraseña" style="width:100%;text-align:center;margin:10px 0 6px">
+        <input type="text" id="slink" autocomplete="off" placeholder="Enlace del torneo" style="width:100%;margin:0 0 10px">
+        <button class="b" type="submit" style="margin:0">Ver torneo</button><p class="muted warn" id="pinerr"></p>`;
+  };
+  setMode("org");
+  document.getElementById("mOrg").onclick=()=>setMode("org");
+  document.getElementById("mSpec").onclick=()=>setMode("spec");
+  return new Promise(()=>{
+    f.onsubmit=async e=>{
       e.preventDefault();
-      if(await sha("vainillita:"+document.getElementById("pin").value.trim())===PIN_HASH){
-        localStorage.setItem("vain_org",PIN_HASH);location.reload();
-      }else document.getElementById("pinerr").textContent="PIN incorrecto.";
+      const v=document.getElementById("pin").value.trim(),err=document.getElementById("pinerr");
+      if(f.dataset.m==="org"){
+        if(await sha("vainillita:"+v)===PIN_HASH){localStorage.setItem("vain_org",PIN_HASH);location.reload()}
+        else err.textContent="PIN incorrecto.";
+      }else{
+        if(await sha("vainillita:"+v)!==SPEC_HASH)return err.textContent="Contraseña incorrecta.";
+        const l=document.getElementById("slink").value,i=l.indexOf("#v=");
+        if(i<0)return err.textContent="Pega el enlace completo del torneo.";
+        location.hash=l.slice(i);location.reload();
+      }
     };
   });
 }
