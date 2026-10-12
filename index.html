@@ -24,7 +24,12 @@ h1{margin:0 0 18px;font-weight:700;letter-spacing:10px;font-size:22px;color:var(
 #panel-fifa{position:absolute;inset:0;background:#0c1a2b;transform:translateX(100%);transition:transform .55s cubic-bezier(.7,0,.2,1);overflow-y:auto;max-width:none;padding:0}
 #panel-fifa>.inner{max-width:1040px;margin:0 auto;padding:24px 20px 60px}
 #stage.fifa #panel-fifa{transform:translateX(0)}
-body.viewer .tabs,body.viewer #panel-fifa,body.locked .tabs{display:none}
+body.viewer .tabs,body.viewer #panel-fifa{display:none}
+#adminBox{position:fixed;top:10px;right:12px;z-index:50;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;max-width:calc(100% - 24px);background:#0e1217ee;border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+#adminBox .b{margin:0;padding:7px 12px;font-size:10px}
+#adminBox input{width:110px;padding:7px 8px;font-size:12px}
+#adminBox form{display:flex;gap:6px;align-items:center}
+#adminBox [hidden]{display:none}
 .banner{background:#0e1217;border:1px solid var(--acc);color:var(--acc2);padding:10px 14px;border-radius:4px;font-size:12px;letter-spacing:1px;margin-bottom:18px;text-align:center}
 .card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:20px 22px;margin:0 0 18px}
 .skin-fifa .card{background:#12263c;border-color:#23405f}
@@ -624,57 +629,39 @@ function createApp(root,fifa,opts={}){
   return {render};
 }
 
-/* ---------- acceso del organizador ---------- */
+/* ---------- código de administrador ---------- */
 const PIN_HASH="b0eb879c196f84594cc0a73e46611d92578b830b10b8f4e95fa643b23915fd1e";
 async function sha(s){
   const d=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));
   return [...new Uint8Array(d)].map(b=>b.toString(16).padStart(2,"0")).join("");
 }
-const SPEC_HASH="d56652d9c7e8c444c9101bda1f1dbb81743882ba75018e647cd9423b566b3180";
-async function unlockOrganizer(){
-  if(localStorage.getItem("vain_org")===PIN_HASH)return true;
-  document.body.classList.add("locked");
-  const stage=document.getElementById("stage");
-  stage.innerHTML=`<div class="panel" style="max-width:440px"><div class="card" style="text-align:center">
-    <div class="row" style="grid-template-columns:1fr 1fr;margin-bottom:14px">
-      <button class="b" id="mOrg" style="margin:0">Organizador</button><button class="b alt" id="mSpec" style="margin:0">Espectador</button></div>
-    <form id="pinf"></form></div></div>`;
-  const f=document.getElementById("pinf");
-  const setMode=m=>{
-    document.getElementById("mOrg").className="b"+(m==="org"?"":" alt");
-    document.getElementById("mSpec").className="b"+(m==="spec"?"":" alt");
-    f.dataset.m=m;
-    f.innerHTML=m==="org"
-      ?`<h3>Acceso del organizador</h3><p class="muted">Solo para quien organiza el torneo.</p>
-        <input type="password" id="pin" inputmode="numeric" autocomplete="off" placeholder="PIN" style="width:100%;text-align:center;margin:10px 0">
-        <button class="b" type="submit" style="margin:0">Entrar</button><p class="muted warn" id="pinerr"></p>`
-      :`<h3>Acceso de espectador</h3><p class="muted">Ingresa la contraseña y pega el enlace del torneo que te compartieron (si ya abriste el enlace, no hace falta).</p>
-        <input type="password" id="pin" autocomplete="off" placeholder="Contraseña" style="width:100%;text-align:center;margin:10px 0 6px">
-        <input type="text" id="slink" autocomplete="off" placeholder="Enlace del torneo" style="width:100%;margin:0 0 10px">
-        <button class="b" type="submit" style="margin:0">Ver torneo</button><p class="muted warn" id="pinerr"></p>`;
+const isAdmin=()=>localStorage.getItem("vain_org")===PIN_HASH;
+function adminBox(){
+  const box=document.createElement("div");
+  box.id="adminBox";
+  const base=location.href.split("#")[0];
+  if(isAdmin()){
+    box.innerHTML=`<span class="muted">Administrador</span>${location.hash.startsWith("#v=")?`<button class="b alt" id="toPanel">Ir al panel</button>`:""}<button class="b alt" id="aOut">Salir</button>`;
+    document.body.append(box);
+    box.querySelector("#aOut").onclick=()=>{localStorage.removeItem("vain_org");location.href=base};
+    const tp=box.querySelector("#toPanel");if(tp)tp.onclick=()=>{location.href=base};
+    return;
+  }
+  box.innerHTML=`<button class="b alt" id="aOpen">Código de administrador</button>
+    <form id="aForm" hidden><input type="password" id="aPin" inputmode="numeric" autocomplete="off" placeholder="Código"><button class="b" type="submit">Entrar</button><span class="muted warn" id="aErr"></span></form>`;
+  document.body.append(box);
+  box.querySelector("#aOpen").onclick=()=>{const f=box.querySelector("#aForm");f.hidden=!f.hidden;if(!f.hidden)box.querySelector("#aPin").focus()};
+  box.querySelector("#aForm").onsubmit=async e=>{
+    e.preventDefault();
+    if(await sha("vainillita:"+box.querySelector("#aPin").value.trim())===PIN_HASH){
+      localStorage.setItem("vain_org",PIN_HASH);location.href=base;
+    }else box.querySelector("#aErr").textContent="Código incorrecto";
   };
-  setMode("org");
-  document.getElementById("mOrg").onclick=()=>setMode("org");
-  document.getElementById("mSpec").onclick=()=>setMode("spec");
-  return new Promise(()=>{
-    f.onsubmit=async e=>{
-      e.preventDefault();
-      const v=document.getElementById("pin").value.trim(),err=document.getElementById("pinerr");
-      if(f.dataset.m==="org"){
-        if(await sha("vainillita:"+v)===PIN_HASH){localStorage.setItem("vain_org",PIN_HASH);location.reload()}
-        else err.textContent="PIN incorrecto.";
-      }else{
-        if(await sha("vainillita:"+v)!==SPEC_HASH)return err.textContent="Contraseña incorrecta.";
-        const l=document.getElementById("slink").value,i=l.indexOf("#v=");
-        if(i<0)return err.textContent="Pega el enlace completo del torneo.";
-        location.hash=l.slice(i);location.reload();
-      }
-    };
-  });
 }
 
 /* ---------- arranque ---------- */
 (async()=>{
+  adminBox();
   const h=location.hash;
   if(h.startsWith("#v=")){
     try{
@@ -689,8 +676,11 @@ async function unlockOrganizer(){
     }
     return;
   }
-  if(!await unlockOrganizer())return;
-  document.body.classList.remove("locked");
+  if(!isAdmin()){
+    document.body.classList.add("viewer");
+    document.getElementById("panel-torneo").innerHTML='<div class="banner">MODO ESPECTADOR · SOLO LECTURA</div><div class="card"><h3>Sin torneo para mostrar</h3><p class="muted">Abre el enlace o escanea el QR que compartió el organizador para ver el torneo. Si eres el organizador, ingresa el código de administrador arriba a la derecha.</p></div>';
+    return;
+  }
   apps.push(createApp(document.getElementById("panel-torneo"),false));
   apps.push(createApp(document.getElementById("fifa-inner"),true));
   const stage=document.getElementById("stage");
