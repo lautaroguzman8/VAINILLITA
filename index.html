@@ -24,7 +24,7 @@ h1{margin:0 0 18px;font-weight:700;letter-spacing:10px;font-size:22px;color:var(
 #panel-fifa{position:absolute;inset:0;background:#0c1a2b;transform:translateX(100%);transition:transform .55s cubic-bezier(.7,0,.2,1);overflow-y:auto;max-width:none;padding:0}
 #panel-fifa>.inner{max-width:1040px;margin:0 auto;padding:24px 20px 60px}
 #stage.fifa #panel-fifa{transform:translateX(0)}
-body.viewer .tabs,body.viewer #panel-fifa{display:none}
+body.viewer .tabs,body.viewer #panel-fifa,body.locked .tabs{display:none}
 .banner{background:#0e1217;border:1px solid var(--acc);color:var(--acc2);padding:10px 14px;border-radius:4px;font-size:12px;letter-spacing:1px;margin-bottom:18px;text-align:center}
 .card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:20px 22px;margin:0 0 18px}
 .skin-fifa .card{background:#12263c;border-color:#23405f}
@@ -624,6 +624,31 @@ function createApp(root,fifa,opts={}){
   return {render};
 }
 
+/* ---------- acceso del organizador ---------- */
+const PIN_HASH="b0eb879c196f84594cc0a73e46611d92578b830b10b8f4e95fa643b23915fd1e";
+async function sha(s){
+  const d=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));
+  return [...new Uint8Array(d)].map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+async function unlockOrganizer(){
+  if(localStorage.getItem("vain_org")===PIN_HASH)return true;
+  document.body.classList.add("locked");
+  const stage=document.getElementById("stage");
+  stage.innerHTML=`<div class="panel" style="max-width:420px"><div class="card" style="text-align:center">
+    <h3>Acceso del organizador</h3>
+    <p class="muted">Esta vista es solo para quien organiza el torneo. Si eres espectador, usa el enlace o el QR que te compartieron.</p>
+    <form id="pinf"><input type="password" id="pin" inputmode="numeric" autocomplete="off" placeholder="PIN" style="width:100%;text-align:center;margin:10px 0">
+    <button class="b" type="submit" style="margin:0">Entrar</button><p class="muted warn" id="pinerr"></p></form></div></div>`;
+  return new Promise(res=>{
+    document.getElementById("pinf").onsubmit=async e=>{
+      e.preventDefault();
+      if(await sha("vainillita:"+document.getElementById("pin").value.trim())===PIN_HASH){
+        localStorage.setItem("vain_org",PIN_HASH);location.reload();
+      }else document.getElementById("pinerr").textContent="PIN incorrecto.";
+    };
+  });
+}
+
 /* ---------- arranque ---------- */
 (async()=>{
   const h=location.hash;
@@ -640,6 +665,8 @@ function createApp(root,fifa,opts={}){
     }
     return;
   }
+  if(!await unlockOrganizer())return;
+  document.body.classList.remove("locked");
   apps.push(createApp(document.getElementById("panel-torneo"),false));
   apps.push(createApp(document.getElementById("fifa-inner"),true));
   const stage=document.getElementById("stage");
